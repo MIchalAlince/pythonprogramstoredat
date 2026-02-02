@@ -1,7 +1,7 @@
 [
   {
     "name": "Calculator",
-    "description": "Jednoduchá kalkulačka pro Windows.",
+    "description": "Jednoduchá grafická kalkulačka.",
     "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/calculator.png",
     "filename": {
       "Windows": "calculatorsetup.exe",
