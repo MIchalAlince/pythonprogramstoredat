@@ -9,15 +9,9 @@
       "Linux": "calculatorsetup_linux.AppImage"
     },
     "files": {
-      "Windows": [
-        "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculatorsetup.exe"
-      ],
-      "Mac": [
-        "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculatorsetup_mac.dmg"
-      ],
-      "Linux": [
-        "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculatorsetup_linux.AppImage"
-      ]
+      "Windows": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculatorsetup.exe",
+      "Mac": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculatorsetup_mac.dmg",
+      "Linux": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculatorsetup_linux.AppImage"
     }
   }
 ]
