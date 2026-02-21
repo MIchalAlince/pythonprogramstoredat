@@ -3,6 +3,7 @@
     "name": "Calculator",
     "description": "Jednoduchá kalkulačka",
     "version": "1.1.0",
+    "release_date": "21-2-2026",
     "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/calculator.png",
     "filename": {
       "Windows": "calculatorsetup.exe"
