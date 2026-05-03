@@ -14,7 +14,7 @@ window = None
 # ---------------- INTERNET ----------------
 def has_internet():
     try:
-        requests.get("https://www.google.com", timeout=3)
+        requests.get("https://www.google.cz", timeout=3)
         return True
     except:
         return False
@@ -88,7 +88,12 @@ class DownloadThread(QThread):
 
             with open(self.target, "wb") as f:
                 for chunk in r.iter_content(8192):
+
                     if not self.running:
+                        try:
+                            r.close()
+                        except:
+                            pass
                         return
 
                     if not chunk:
@@ -147,7 +152,6 @@ class InstallDialog(QDialog):
         btns.addWidget(self.btn_cancel)
         layout.addLayout(btns)
 
-    # START
     def start(self):
         url = self.app.get("files", {}).get("Windows")
 
@@ -166,12 +170,10 @@ class InstallDialog(QDialog):
 
         self.btn_start.setEnabled(False)
 
-    # UPDATE UI
     def update(self, p, s):
         self.bar.setValue(p)
         self.info.setText(f"{p}% | {s:.2f} MB/s")
 
-    # CANCEL
     def cancel(self):
         if self.thread:
             self.thread.stop()
@@ -182,7 +184,6 @@ class InstallDialog(QDialog):
 
         self.reject()
 
-    # FINISH
     def finish(self, path):
         sha = self.app.get("sha256", {}).get("Windows")
 
@@ -192,7 +193,6 @@ class InstallDialog(QDialog):
             self.reject()
             return
 
-        # uložit verzi
         with open(path + ".ver", "w") as f:
             f.write(self.app["version"])
 
@@ -260,7 +260,6 @@ class Store(QMainWindow):
 
         self.refresh()
 
-    # ---------------- VERSION ----------------
     def local_version(self, app):
         f = os.path.join(INSTALLED_DIR, app["name"] + ".exe.ver")
         if not os.path.exists(f):
@@ -271,10 +270,18 @@ class Store(QMainWindow):
         return os.path.exists(os.path.join(INSTALLED_DIR, app["name"] + ".exe"))
 
     def has_update(self, app):
-        lv = self.local_version(app)
-        return lv is not None and lv != app["version"]
+        if not self.is_installed(app):
+            return False
 
-    # ---------------- BUTTON STATE ----------------
+        lv = self.local_version(app)
+        if not lv:
+            return True
+
+        try:
+            return tuple(map(int, lv.split("."))) < tuple(map(int, app["version"].split(".")))
+        except:
+            return lv != app["version"]
+
     def update_buttons(self):
         if not self.selected:
             self.install_btn.setEnabled(False)
@@ -289,12 +296,10 @@ class Store(QMainWindow):
         self.update_btn.setEnabled(update)
         self.uninstall_btn.setEnabled(installed)
 
-    # ---------------- SELECT ----------------
     def select(self, item):
         self.selected = item.data(Qt.UserRole)
         self.update_buttons()
 
-    # ---------------- ACTIONS ----------------
     def install(self):
         if self.selected:
             InstallDialog(self.selected, "install").exec()
@@ -320,7 +325,6 @@ class Store(QMainWindow):
 
         self.refresh()
 
-    # ---------------- UI ----------------
     def refresh(self):
         self.grid.clear()
 
@@ -338,6 +342,7 @@ class Store(QMainWindow):
             item.setData(Qt.UserRole, a)
             self.grid.addItem(item)
 
+        self.selected = None
         self.update_buttons()
 
     def toggle(self):
