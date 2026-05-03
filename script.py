@@ -1,258 +1,379 @@
-import sys, os, platform, shutil, requests
-from packaging.version import Version
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QListWidget, QListWidgetItem,
-    QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QMessageBox, QFileDialog, QComboBox, QLineEdit
-)
-from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtCore import Qt, QPropertyAnimation, QSize
+import sys, os, time, requests, hashlib
+from PySide6.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from win32com.shell import shell, shellcon
+from win32com.client import Dispatch
 
-SYSTEM = platform.system()
-INSTALL_ROOT = os.path.join(os.getenv("LOCALAPPDATA"), "PythonProgramStore")
-os.makedirs(INSTALL_ROOT, exist_ok=True)
-APPS_URL = "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/json/apps.json"
+GITHUB_JSON_URL = "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/json/apps.json"
+INSTALLED_DIR = os.path.join(os.getcwd(), "installed_apps")
+os.makedirs(INSTALLED_DIR, exist_ok=True)
 
-# ================= Shortcut =================
-def create_shortcut(target, shortcut_path, icon=None):
-    import win32com.client
-    shell = win32com.client.Dispatch("WScript.Shell")
-    shortcut = shell.CreateShortcut(shortcut_path)
-    shortcut.TargetPath = target
-    shortcut.WorkingDirectory = os.path.dirname(target)
-    if icon:
-        shortcut.IconLocation = icon
-    shortcut.save()
+window = None
 
-def start_menu_path(name):
-    return os.path.join(
-        os.getenv("APPDATA"),
-        r"Microsoft\Windows\Start Menu\Programs",
-        name + ".lnk"
-    )
+# ---------------- INTERNET ----------------
+def has_internet():
+    try:
+        requests.get("https://www.google.com", timeout=3)
+        return True
+    except:
+        return False
 
-# ================= STORE =================
-class Store(QWidget):
-    def __init__(self):
+# ---------------- SHA256 ----------------
+def check_sha256(file_path, expected):
+    if not expected:
+        return True
+    if expected.startswith("sha256:"):
+        expected = expected.split("sha256:")[1]
+
+    h = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(8192):
+            h.update(chunk)
+
+    return h.hexdigest().lower() == expected.lower()
+
+# ---------------- LOAD ----------------
+class LoadThread(QThread):
+    progress = Signal(int)
+    finished = Signal(list)
+    offline = Signal(bool)
+
+    def run(self):
+        try:
+            for i in range(0, 40, 5):
+                self.progress.emit(i)
+                self.msleep(40)
+
+            while not has_internet():
+                self.offline.emit(True)
+                self.msleep(1000)
+
+            self.offline.emit(False)
+
+            r = requests.get(GITHUB_JSON_URL, timeout=10)
+            data = r.json()
+
+            if isinstance(data, dict):
+                data = data.get("apps", [])
+
+            for i in range(40, 100, 5):
+                self.progress.emit(i)
+                self.msleep(30)
+
+            self.finished.emit(data)
+
+        except:
+            self.finished.emit([])
+
+# ---------------- DOWNLOAD ----------------
+class DownloadThread(QThread):
+    progress = Signal(int, float)
+    done = Signal(str)
+    fail = Signal(str)
+
+    def __init__(self, url, target):
         super().__init__()
-        self.setWindowTitle("Python Program Store")
-        self.resize(1000, 650)
+        self.url = url
+        self.target = target
+        self.running = True
 
-        main = QVBoxLayout(self)
+    def run(self):
+        try:
+            r = requests.get(self.url, stream=True, timeout=15)
 
-        # ===== TOP BAR =====
-        top = QHBoxLayout()
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Vyhledat aplikaci...")
-        self.search.textChanged.connect(self.filter_apps)
+            total = int(r.headers.get("content-length", 1))
+            downloaded = 0
+            start = time.time()
 
-        self.sort_combo = QComboBox()
-        self.sort_combo.addItems(["Název A–Z", "Název Z–A", "Nejnovější verze"])
-        self.sort_combo.currentIndexChanged.connect(self.sort_apps)
+            with open(self.target, "wb") as f:
+                for chunk in r.iter_content(8192):
+                    if not self.running:
+                        return
 
-        self.view_combo = QComboBox()
-        self.view_combo.addItems(["Řádky", "Dlaždice"])
-        self.view_combo.currentIndexChanged.connect(self.change_view)
+                    if not chunk:
+                        continue
 
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Světlý režim", "Tmavý režim"])
-        self.theme_combo.currentIndexChanged.connect(self.change_theme)
+                    f.write(chunk)
+                    downloaded += len(chunk)
 
-        top.addWidget(self.search)
-        top.addWidget(self.sort_combo)
-        top.addWidget(self.view_combo)
-        top.addWidget(self.theme_combo)
-        main.addLayout(top)
+                    percent = int(downloaded * 100 / total)
+                    speed = downloaded / 1024 / 1024 / (time.time() - start + 0.01)
 
-        # ===== CONTENT =====
-        content = QHBoxLayout()
-        self.list = QListWidget()
-        self.list.itemClicked.connect(self.show_details)
+                    self.progress.emit(percent, speed)
 
-        self.details_icon = QLabel()
-        self.details_icon.setFixedSize(128, 128)
+            if self.running:
+                self.done.emit(self.target)
 
-        self.details = QLabel("Vyber aplikaci")
-        self.details.setWordWrap(True)
+        except Exception as e:
+            self.fail.emit(str(e))
 
-        right_panel = QVBoxLayout()
-        right_panel.addWidget(self.details_icon)
-        right_panel.addWidget(self.details)
+    def stop(self):
+        self.running = False
 
-        content.addWidget(self.list, 3)
-        content.addLayout(right_panel, 2)
-        main.addLayout(content)
+# ---------------- INSTALL DIALOG ----------------
+class InstallDialog(QDialog):
+    def __init__(self, app, mode="install"):
+        super().__init__()
+        self.app = app
+        self.mode = mode
 
-        # ===== BUTTONS =====
+        self.setWindowTitle(app["name"])
+        self.setFixedSize(450, 200)
+
+        self.thread = None
+        self.target = None
+
+        layout = QVBoxLayout(self)
+
+        title = "Aktualizovat" if mode == "update" else "Instalovat"
+
+        self.label = QLabel(f"{title} {app['name']}?")
+        self.bar = QProgressBar()
+        self.info = QLabel("")
+
+        self.btn_start = QPushButton(title)
+        self.btn_cancel = QPushButton("Zrušit")
+
+        self.btn_start.clicked.connect(self.start)
+        self.btn_cancel.clicked.connect(self.cancel)
+
+        layout.addWidget(self.label)
+        layout.addWidget(self.bar)
+        layout.addWidget(self.info)
+
         btns = QHBoxLayout()
-        self.install_btn = QPushButton("Install")
-        self.uninstall_btn = QPushButton("Uninstall")
-        btns.addWidget(self.install_btn)
-        btns.addWidget(self.uninstall_btn)
-        main.addLayout(btns)
+        btns.addWidget(self.btn_start)
+        btns.addWidget(self.btn_cancel)
+        layout.addLayout(btns)
+
+    # START
+    def start(self):
+        url = self.app.get("files", {}).get("Windows")
+
+        if not url:
+            QMessageBox.critical(self, "Chyba", "Chybí URL")
+            self.reject()
+            return
+
+        self.target = os.path.join(INSTALLED_DIR, self.app["name"] + ".exe")
+
+        self.thread = DownloadThread(url, self.target)
+        self.thread.progress.connect(self.update)
+        self.thread.done.connect(self.finish)
+        self.thread.fail.connect(self.error)
+        self.thread.start()
+
+        self.btn_start.setEnabled(False)
+
+    # UPDATE UI
+    def update(self, p, s):
+        self.bar.setValue(p)
+        self.info.setText(f"{p}% | {s:.2f} MB/s")
+
+    # CANCEL
+    def cancel(self):
+        if self.thread:
+            self.thread.stop()
+            self.thread.wait()
+
+        if self.target and os.path.exists(self.target):
+            os.remove(self.target)
+
+        self.reject()
+
+    # FINISH
+    def finish(self, path):
+        sha = self.app.get("sha256", {}).get("Windows")
+
+        if sha and not check_sha256(path, sha):
+            QMessageBox.critical(self, "Chyba", "SHA256 nesouhlasí")
+            os.remove(path)
+            self.reject()
+            return
+
+        # uložit verzi
+        with open(path + ".ver", "w") as f:
+            f.write(self.app["version"])
+
+        try:
+            desktop = shell.SHGetFolderPath(0, shellcon.CSIDL_DESKTOP, None, 0)
+            link = os.path.join(desktop, self.app["name"] + ".lnk")
+
+            sh = Dispatch("WScript.Shell").CreateShortcut(link)
+            sh.TargetPath = path
+            sh.save()
+        except:
+            pass
+
+        self.accept()
+
+    def error(self, msg):
+        QMessageBox.critical(self, "Chyba", msg)
+        self.reject()
+
+# ---------------- STORE ----------------
+class Store(QMainWindow):
+    def __init__(self, apps):
+        super().__init__()
+        self.apps = apps
+        self.selected = None
+        self.dark = False
+
+        self.setWindowTitle("Python Program Store")
+        self.resize(900, 600)
+
+        self.ui()
+
+    def ui(self):
+        w = QWidget()
+        self.setCentralWidget(w)
+        l = QVBoxLayout(w)
+
+        top = QHBoxLayout()
+
+        self.install_btn = QPushButton("Instalovat")
+        self.update_btn = QPushButton("Aktualizovat")
+        self.uninstall_btn = QPushButton("Odinstalovat")
+        self.theme = QPushButton("🌙")
 
         self.install_btn.clicked.connect(self.install)
+        self.update_btn.clicked.connect(self.update)
         self.uninstall_btn.clicked.connect(self.uninstall)
+        self.theme.clicked.connect(self.toggle)
 
-        self.set_light_theme()
-        self.load_apps()
+        top.addWidget(self.install_btn)
+        top.addWidget(self.update_btn)
+        top.addWidget(self.uninstall_btn)
+        top.addWidget(self.theme)
+        top.addStretch()
 
-    # ================= THEME =================
-    def set_light_theme(self):
-        self.setStyleSheet("""
-            QWidget { background-color: white; color: black; }
-            QListWidget { background-color: #F2F2F2; }
-        """)
+        l.addLayout(top)
 
-    def set_dark_theme(self):
-        self.setStyleSheet("""
-            QWidget { background-color: #1E1E1E; color: white; }
-            QListWidget { background-color: #252526; }
-        """)
+        self.grid = QListWidget()
+        self.grid.setViewMode(QListWidget.IconMode)
+        self.grid.setIconSize(QSize(96, 96))
+        self.grid.setSpacing(10)
+        self.grid.itemClicked.connect(self.select)
 
-    def change_theme(self):
-        if self.theme_combo.currentIndex() == 0:
-            self.set_light_theme()
-        else:
-            self.set_dark_theme()
+        l.addWidget(self.grid)
 
-    # ================= LOAD =================
-    def load_apps(self):
-        self.list.clear()
-        self.apps = requests.get(APPS_URL).json()
-        self.displayed_apps = self.apps.copy()
-        self.populate_list()
+        self.refresh()
 
-    def populate_list(self):
-        self.list.clear()
-        for app in self.displayed_apps:
-            item = QListWidgetItem(app["name"])
-            item.app = app
-            if "icon_url" in app:
-                try:
-                    r = requests.get(app["icon_url"])
-                    pix = QPixmap()
-                    pix.loadFromData(r.content)
-                    item.setIcon(QIcon(pix))
-                except:
-                    pass
-            self.list.addItem(item)
+    # ---------------- VERSION ----------------
+    def local_version(self, app):
+        f = os.path.join(INSTALLED_DIR, app["name"] + ".exe.ver")
+        if not os.path.exists(f):
+            return None
+        return open(f).read().strip()
 
-    # ================= FILTER =================
-    def filter_apps(self):
-        text = self.search.text().lower()
-        self.displayed_apps = [a for a in self.apps if text in a["name"].lower()]
-        self.sort_apps()
+    def is_installed(self, app):
+        return os.path.exists(os.path.join(INSTALLED_DIR, app["name"] + ".exe"))
 
-    # ================= SORT =================
-    def sort_apps(self):
-        mode = self.sort_combo.currentIndex()
-        if mode == 0:
-            self.displayed_apps.sort(key=lambda x: x["name"])
-        elif mode == 1:
-            self.displayed_apps.sort(key=lambda x: x["name"], reverse=True)
-        elif mode == 2:
-            self.displayed_apps.sort(
-                key=lambda x: Version(x["version"]),
-                reverse=True
-            )
-        self.populate_list()
+    def has_update(self, app):
+        lv = self.local_version(app)
+        return lv is not None and lv != app["version"]
 
-    # ================= VIEW =================
-    def change_view(self):
-        if self.view_combo.currentIndex() == 0:
-            self.list.setViewMode(QListWidget.ListMode)
-        else:
-            self.list.setViewMode(QListWidget.IconMode)
-            self.list.setIconSize(QSize(96,96))
-        self.populate_list()
+    # ---------------- BUTTON STATE ----------------
+    def update_buttons(self):
+        if not self.selected:
+            self.install_btn.setEnabled(False)
+            self.update_btn.setEnabled(False)
+            self.uninstall_btn.setEnabled(False)
+            return
 
-    # ================= DETAILS =================
-    def show_details(self, item):
-        app = item.app
-        if "icon_url" in app:
+        installed = self.is_installed(self.selected)
+        update = self.has_update(self.selected)
+
+        self.install_btn.setEnabled(not installed)
+        self.update_btn.setEnabled(update)
+        self.uninstall_btn.setEnabled(installed)
+
+    # ---------------- SELECT ----------------
+    def select(self, item):
+        self.selected = item.data(Qt.UserRole)
+        self.update_buttons()
+
+    # ---------------- ACTIONS ----------------
+    def install(self):
+        if self.selected:
+            InstallDialog(self.selected, "install").exec()
+            self.refresh()
+
+    def update(self):
+        if self.selected:
+            InstallDialog(self.selected, "update").exec()
+            self.refresh()
+
+    def uninstall(self):
+        if not self.selected:
+            return
+
+        exe = os.path.join(INSTALLED_DIR, self.selected["name"] + ".exe")
+
+        if os.path.exists(exe):
+            os.remove(exe)
+
+        ver = exe + ".ver"
+        if os.path.exists(ver):
+            os.remove(ver)
+
+        self.refresh()
+
+    # ---------------- UI ----------------
+    def refresh(self):
+        self.grid.clear()
+
+        for a in self.apps:
+            item = QListWidgetItem(a["name"])
+
             try:
-                r = requests.get(app["icon_url"])
+                r = requests.get(a["icon_url"], timeout=5)
                 pix = QPixmap()
                 pix.loadFromData(r.content)
-                self.details_icon.setPixmap(pix.scaled(128,128))
+                item.setIcon(QIcon(pix))
             except:
-                self.details_icon.clear()
+                pass
 
-        sha_value = app["sha256"][SYSTEM]
-        if sha_value.startswith("sha256:"):
-            sha_value = sha_value.split(":",1)[1]
+            item.setData(Qt.UserRole, a)
+            self.grid.addItem(item)
 
-        self.details.setText(
-            f"<h2>{app['name']}</h2>"
-            f"<b>Verze:</b> {app['version']}<br>"
-            f"<b>Datum vydání:</b> {app.get('release_date','?')}<br>"
-            f"<b>SHA256:</b> {sha_value}<br>"
-            f"{app['description']}"
-        )
+        self.update_buttons()
 
-        anim = QPropertyAnimation(self.details, b"windowOpacity")
-        anim.setDuration(200)
-        anim.setStartValue(0)
-        anim.setEndValue(1)
-        anim.start()
+    def toggle(self):
+        self.dark = not self.dark
+        self.setStyleSheet("background:#1e1e1e; color:white;" if self.dark else "")
 
-    # ================= INSTALL =================
-    def install(self):
-        item = self.list.currentItem()
-        if not item: return
-        app = item.app
-
-        folder = QFileDialog.getExistingDirectory(
-            self, "Vyber složku",
-            os.path.join(INSTALL_ROOT, app["name"])
-        )
-        if not folder: return
-
-        os.makedirs(folder, exist_ok=True)
-        exe_name = os.path.basename(app["files"][SYSTEM])
-        exe_path = os.path.join(folder, exe_name)
-
-        r = requests.get(app["files"][SYSTEM])
-        with open(exe_path, "wb") as f:
-            f.write(r.content)
-
-        create_shortcut(
-            exe_path,
-            os.path.join(os.path.expanduser("~"), "Desktop", app["name"]+".lnk"),
-            exe_path
-        )
-
-        create_shortcut(
-            exe_path,
-            start_menu_path(app["name"]),
-            exe_path
-        )
-
-        QMessageBox.information(self,"Hotovo","Instalace dokončena.")
-
-    # ================= UNINSTALL =================
-    def uninstall(self):
-        item = self.list.currentItem()
-        if not item: return
-        app = item.app
-        folder = os.path.join(INSTALL_ROOT, app["name"])
-
-        if os.path.exists(folder):
-            shutil.rmtree(folder)
-
-        for path in [
-            os.path.join(os.path.expanduser("~"), "Desktop", app["name"]+".lnk"),
-            start_menu_path(app["name"])
-        ]:
-            if os.path.exists(path):
-                os.remove(path)
-
-        QMessageBox.information(self,"Hotovo","Aplikace odstraněna.")
-
-
-if __name__=="__main__":
+# ---------------- RUN ----------------
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    s = Store()
-    s.show()
+
+    splash = QWidget()
+    splash.setWindowTitle("Loading")
+    splash.resize(300, 200)
+
+    layout = QVBoxLayout(splash)
+    bar = QProgressBar()
+    label = QLabel("Načítám...")
+
+    layout.addWidget(label)
+    layout.addWidget(bar)
+
+    splash.show()
+
+    def offline(state):
+        label.setText("čekám na internet..." if state else "Načítám...")
+
+    def loaded(data):
+        global window
+        splash.close()
+        window = Store(data)
+        window.show()
+
+    t = LoadThread()
+    t.progress.connect(bar.setValue)
+    t.offline.connect(offline)
+    t.finished.connect(loaded)
+    t.start()
+
     sys.exit(app.exec())
