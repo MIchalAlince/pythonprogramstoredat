@@ -1,4 +1,4 @@
-import sys, os, time, requests, hashlib
+import sys, os, time, requests, hashlib, subprocess
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
@@ -256,9 +256,24 @@ class Store(QMainWindow):
         self.grid.setSpacing(10)
         self.grid.itemClicked.connect(self.select)
 
+        # 👉 TADY JE NOVÁ VĚC
+        self.grid.itemDoubleClicked.connect(self.launch_app)
+
         l.addWidget(self.grid)
 
         self.refresh()
+
+    def launch_app(self, item):
+        app = item.data(Qt.UserRole)
+        exe = os.path.join(INSTALLED_DIR, app["name"] + ".exe")
+
+        if os.path.exists(exe):
+            try:
+                subprocess.Popen(exe)
+            except Exception as e:
+                QMessageBox.critical(self, "Chyba", str(e))
+        else:
+            QMessageBox.warning(self, "Info", "Aplikace není nainstalovaná")
 
     def local_version(self, app):
         f = os.path.join(INSTALLED_DIR, app["name"] + ".exe.ver")
