@@ -4,7 +4,7 @@
     "description": "aplikace na stahování audia a videa",
     "version": "1.4.0",
     "release_date": "05-05-2026",
-    "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/calculator.png",
+    "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/stahnivideo.png",
     "filename": {
       "Windows": "stahni_video_1.4.0_setup.exe"
     },
