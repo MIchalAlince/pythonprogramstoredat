@@ -1,18 +1,27 @@
-[
-  {
-    "name": "Stáhni video",
-    "description": "aplikace na stahování audia a videa",
-    "version": "1.4.0",
-    "release_date": "05-05-2026",
-    "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/stahnivideo.png",
-    "filename": {
-      "Windows": "stahni_video_1.4.0_setup.exe"
-    },
-    "files": {
-      "Windows": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/stahni_video_1.4.0/stahni_video_1.4.0_setup.exe"
-    },
-    "sha256": {
-      "Windows": "4317efe999d28e682baf91df996c08b52ccf6502b11b9eb384e6c7c12d15e67b"
-    }
-  }
-]
+{
+  "name": "Stáhni video",
+  "description": "aplikace na stahování audia a videa",
+  "version": "1.4.0",
+  "release_date": "05.05.2026",
+  "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/stahnivideo.png",
+
+  "filename": {
+    "Windows": "stahni_video_1.4.0_setup.exe",
+    "Android": null,
+    "MacOS": null
+  },
+
+  "files": {
+    "Windows": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/stahni_video_1.4.0/stahni_video_1.4.0_setup.exe",
+    "Android": null,
+    "MacOS": null
+  },
+
+  "sha256": {
+    "Windows": "4317efe999d28e682baf91df996c08b52ccf6502b11b9eb384e6c7c12d15e67b",
+    "Android": null,
+    "MacOS": null
+  },
+
+  "githubfolder": "stahni_video_1.4.0"
+}
