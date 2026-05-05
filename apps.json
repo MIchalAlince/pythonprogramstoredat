@@ -1,15 +1,15 @@
 [
   {
-    "name": "Calculator",
-    "description": "Jednoduchá kalkulačka",
-    "version": "1.1.0",
-    "release_date": "21-2-2026",
+    "name": "Stáhni video",
+    "description": "aplikace na stahování audia a videa",
+    "version": "1.4.0",
+    "release_date": "05-05-2026",
     "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/calculator.png",
     "filename": {
-      "Windows": "calculatorsetup.exe"
+      "Windows": "stahni_video_1.4.0_setup.exe"
     },
     "files": {
-      "Windows": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/v1.0/calculator.exe"
+      "Windows": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/stahni_video_1.4.0_setup/stahni_video_1.4.0_setup.exe"
     },
     "sha256": {
       "Windows": "sha256:dff2d26bd780204c7284702a9b9a38760d440195f31643cd7d118217200151ca"
