@@ -5,6 +5,9 @@
       "version": "1.4.0",
       "release_date": "05.05.2026",
       "icon_url": "https://raw.githubusercontent.com/MIchalAlince/pythonprogramstoredat/icons/stahnivideo.png",
+      "filename": {
+        "Windows": "stahni_video_1.4.0_setup.exe"
+      },
       "files": {
         "Windows": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/stahni_video_1.4.0/stahni_video_1.4.0_setup.exe"
       },
