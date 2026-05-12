@@ -1,0 +1,39 @@
+{
+  "app": "TOOLS",
+  "version": "1.0.0",
+  "release_tag": "TOOLS",
+  "updated": "2026-05-12",
+
+  "source_repo": "https://github.com/MIchalAlince/pythonprogramstoredat",
+
+  "files": {
+    "yt_dlp.exe": {
+      "url": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/TOOLS/yt_dlp.exe",
+      "expected_size_mb": 17.55,
+      "type": "binary"
+    },
+
+    "ffmpeg.exe": {
+      "url": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/TOOLS/ffmpeg.exe",
+      "expected_size_mb": 94.67,
+      "type": "binary"
+    },
+
+    "ffprobe.exe": {
+      "url": "https://github.com/MIchalAlince/pythonprogramstoredat/releases/download/TOOLS/ffprobe.exe",
+      "expected_size_mb": 94.48,
+      "type": "binary"
+    }
+  },
+
+  "validation": {
+    "check_http": true,
+    "check_size": true,
+    "check_exe_header": true,
+    "min_size_mb": {
+      "yt_dlp.exe": 15,
+      "ffmpeg.exe": 80,
+      "ffprobe.exe": 80
+    }
+  }
+}
